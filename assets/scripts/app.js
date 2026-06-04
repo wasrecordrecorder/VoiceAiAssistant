@@ -22,6 +22,7 @@ let textResponseContent = null;
 let thinkingBubble = null;
 let thinkingTools = null;
 let textRequestActive = false;
+let assistantBusy = false;
 let dictationTarget = "";
 let visualizerHtml = "";
 let youtubeApiPromise = null;
@@ -476,6 +477,15 @@ function setInterfaceMode(mode, persist = false) {
   $("textWorkspace").classList.toggle("hidden", interfaceMode !== "text");
   $("voiceModeButton").classList.toggle("active", interfaceMode === "voice");
   $("textModeButton").classList.toggle("active", interfaceMode === "text");
+  if (interfaceMode === "text" && responseBuffer && !textResponseContent) {
+    clearThinkingBubble();
+    textResponseContent = appendChatMessage("assistant", responseBuffer);
+    textResponseBubble = textResponseContent;
+    const bubble = textResponseContent.closest(".bubble");
+    if (bubble) {
+      bubble.classList.add("streaming");
+    }
+  }
   if (persist) {
     backend("settings.save", { ui_mode: interfaceMode });
   }
@@ -567,10 +577,7 @@ function renderSessionList(items, activeId) {
     remove.innerHTML = '<svg class="outline-icon" viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M8 7v13h8V7"/></svg>';
     remove.addEventListener("click", event => {
       event.stopPropagation();
-      const name = session.title || "Новый диалог";
-      if (confirm(`Удалить чат «${name}»?`)) {
-        backend("conversation.delete", { id: session.id });
-      }
+      backend("conversation.delete", { id: session.id });
     });
     actions.append(rename, archive, remove);
     row.append(main, actions);
@@ -587,6 +594,42 @@ function renderSessionList(items, activeId) {
 function scrollChatToBottom() {
   const target = $("chatMessages");
   target.scrollTop = target.scrollHeight;
+}
+
+function createChatEmpty() {
+  const empty = document.createElement("div");
+  empty.className = "chat-empty";
+  empty.id = "chatEmpty";
+  const mark = document.createElement("div");
+  mark.className = "chat-empty-mark";
+  mark.innerHTML = '<svg class="outline-icon" viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 3v-14Z"/><path d="M8 10h8M8 13h5"/></svg>';
+  const title = document.createElement("strong");
+  title.textContent = "Пока пусто";
+  const text = document.createElement("p");
+  text.textContent = "Напишите сообщение, прикрепите файл или продиктуйте запрос. История сохранится локально.";
+  empty.append(mark, title, text);
+  return empty;
+}
+
+function setChatEmptyVisible(visible) {
+  const target = $("chatMessages");
+  let empty = $("chatEmpty");
+  if (visible) {
+    if (!empty) {
+      empty = createChatEmpty();
+    }
+    empty.classList.remove("hidden");
+    if (!empty.parentElement) {
+      target.appendChild(empty);
+    }
+    return;
+  }
+  if (empty) {
+    empty.classList.add("hidden");
+    if (empty.parentElement) {
+      empty.remove();
+    }
+  }
 }
 
 function createAttachmentBadge(item) {
@@ -631,7 +674,7 @@ function appendChatMessage(role, content, createdAt = "", attachments = []) {
   const time = document.createElement("time");
   time.textContent = formatChatTime(createdAt);
   item.append(bubble, time);
-  $("chatEmpty").classList.add("hidden");
+  setChatEmptyVisible(false);
   $("chatMessages").appendChild(item);
   scrollChatToBottom();
   return body;
@@ -647,10 +690,10 @@ function renderChat(payload) {
   const target = $("chatMessages");
   target.replaceChildren();
   const messages = payload.messages || [];
-  $("chatEmpty").classList.toggle("hidden", messages.length > 0);
   if (!messages.length) {
-    target.appendChild($("chatEmpty"));
+    setChatEmptyVisible(true);
   } else {
+    setChatEmptyVisible(false);
     messages.forEach(message => appendChatMessage(message.role, message.content, message.created_at));
   }
   textResponseBubble = null;
@@ -667,7 +710,7 @@ function showThinkingBubble(detail = "") {
     scrollChatToBottom();
     return;
   }
-  $("chatEmpty").classList.add("hidden");
+  setChatEmptyVisible(false);
   const item = document.createElement("article");
   item.className = "chat-message assistant thinking-message";
   const bubble = document.createElement("div");
@@ -721,7 +764,7 @@ function recordToolCall(name, state = "running", result = "") {
 }
 
 function streamChatDelta(delta) {
-  if (interfaceMode !== "text") {
+  if (interfaceMode !== "text" && !textResponseContent) {
     return;
   }
   clearThinkingBubble();
@@ -736,7 +779,7 @@ function streamChatDelta(delta) {
 
 function finishChatResponse(text = "") {
   clearThinkingBubble();
-  if (interfaceMode === "text" && !textResponseContent && text) {
+  if (!textResponseContent && text) {
     textResponseContent = appendChatMessage("assistant", text);
   } else if (textResponseContent && text && !textResponseContent.textContent.trim()) {
     textResponseContent.textContent = text;
@@ -755,7 +798,7 @@ function renderEditCard(payload) {
   card.className = "edit-pill";
   card.innerHTML = `<svg class="outline-icon" viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"/><path d="m13.5 7.5 3 3"/></svg><span>editing file</span><span class="path"></span><span class="diff-minus">-${Number(payload.removed) || 0}</span><span class="diff-plus">+${Number(payload.added) || 0}</span>`;
   card.querySelector(".path").textContent = payload.path || "file";
-  $("chatEmpty").classList.add("hidden");
+  setChatEmptyVisible(false);
   $("chatMessages").appendChild(card);
   $("chatMessages").scrollTop = $("chatMessages").scrollHeight;
 }
@@ -1134,17 +1177,20 @@ function receive(message) {
   if (event === "response.final") {
     finishStreamingResponse(payload.text || responseBuffer);
     finishChatResponse(payload.text || responseBuffer);
+    assistantBusy = false;
     widgetStep = "Ответ готов";
     syncWidget();
     return;
   }
   if (event === "conversation.current") {
-    steps.querySelectorAll(".step").forEach(item => item.remove());
-    responseStep = null;
-    const messages = payload.messages || [];
-    messages.slice(-8).forEach(item => addStep(`${item.role === "user" ? "Вы" : "Ответ"}: ${item.content}`, item.role === "assistant" ? "response" : "input"));
-    if (!messages.length) {
-      stepsEmpty.classList.remove("hidden");
+    if (!assistantBusy) {
+      steps.querySelectorAll(".step").forEach(item => item.remove());
+      responseStep = null;
+      const messages = payload.messages || [];
+      messages.slice(-8).forEach(item => addStep(`${item.role === "user" ? "Вы" : "Ответ"}: ${item.content}`, item.role === "assistant" ? "response" : "input"));
+      if (!messages.length) {
+        stepsEmpty.classList.remove("hidden");
+      }
     }
     renderChat(payload);
     return;
@@ -1155,6 +1201,7 @@ function receive(message) {
   }
   if (event === "assistant.error") {
     clearThinkingBubble();
+    assistantBusy = false;
     if (interfaceMode === "text" && textRequestActive) {
       appendChatMessage("assistant", `Ошибка: ${payload.message || "неизвестная ошибка"}`);
       textRequestActive = false;
@@ -1164,6 +1211,7 @@ function receive(message) {
     return;
   }
   if (event === "assistant.thinking") {
+    assistantBusy = true;
     showThinkingBubble("Думаю над ответом");
   }
   if (event.startsWith("assistant.")) {

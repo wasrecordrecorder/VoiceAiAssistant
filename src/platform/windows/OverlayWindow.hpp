@@ -37,6 +37,7 @@ private:
     HWND window_{};
     std::wstring state_{L"Готов"};
     std::wstring step_{L"Ожидаю команду"};
+    int status_{};
     bool customPosition_{};
     bool positioning_{};
     bool vertical_{};

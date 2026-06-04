@@ -12,10 +12,10 @@
 namespace
 {
 constexpr wchar_t OverlayClassName[] = L"WebViewDA.Voice.Overlay";
-constexpr int HorizontalWidth = 154;
-constexpr int HorizontalHeight = 44;
-constexpr int VerticalWidth = 54;
-constexpr int VerticalHeight = 64;
+constexpr int HorizontalWidth = 196;
+constexpr int HorizontalHeight = 42;
+constexpr int VerticalWidth = 168;
+constexpr int VerticalHeight = 42;
 constexpr int Margin = 16;
 
 std::wstring CompactText(std::wstring value, std::size_t limit)
@@ -35,15 +35,15 @@ std::wstring CompactText(std::wstring value, std::size_t limit)
     {
         value.pop_back();
     }
-    if (value.rfind(L"Р С›РЎвЂљР Р†Р ВµРЎвЂљ:", 0) == 0)
+    if (value.rfind(L"Ответ:", 0) == 0)
     {
-        return L"Р С›РЎвЂљР Р†Р ВµРЎвЂљ Р С–Р С•РЎвЂљР С•Р Р†";
+        return L"Ответ готов";
     }
-    if (value.rfind(L"Р вЂ”Р В°Р С—РЎР‚Р С•РЎРѓ:", 0) == 0)
+    if (value.rfind(L"Запрос:", 0) == 0)
     {
-        return L"Р вЂ”Р В°Р С—РЎР‚Р С•РЎРѓ Р С—РЎР‚Р С‘Р Р…РЎРЏРЎвЂљ";
+        return L"Запрос принят";
     }
-    if (value.rfind(L"Р ВР Р…РЎРѓРЎвЂљРЎР‚РЎС“Р СР ВµР Р…РЎвЂљ:", 0) == 0)
+    if (value.rfind(L"Инструмент:", 0) == 0)
     {
         value.replace(0, 11, L"Tool:");
     }
@@ -51,7 +51,51 @@ std::wstring CompactText(std::wstring value, std::size_t limit)
     {
         return value;
     }
-    return value.substr(0, limit - 1) + L"РІР‚В¦";
+    return value.substr(0, limit - 1) + L"…";
+}
+
+int StatusKind(const std::wstring& state)
+{
+    if (state.find(L"Ошибка") != std::wstring::npos)
+    {
+        return 4;
+    }
+    if (state.find(L"Говор") != std::wstring::npos || state.find(L"Отвеч") != std::wstring::npos)
+    {
+        return 3;
+    }
+    if (state.find(L"Дума") != std::wstring::npos || state.find(L"Распозна") != std::wstring::npos)
+    {
+        return 2;
+    }
+    if (state.find(L"Слуш") != std::wstring::npos || state.find(L"Слышу") != std::wstring::npos || state.find(L"Рация") != std::wstring::npos || state.find(L"Диалог") != std::wstring::npos)
+    {
+        return 1;
+    }
+    return 0;
+}
+
+COLORREF DotColor(int status)
+{
+    switch (status)
+    {
+    case 1:
+        return RGB(126, 200, 255);
+    case 2:
+        return RGB(214, 180, 255);
+    case 3:
+        return RGB(156, 240, 197);
+    case 4:
+        return RGB(255, 141, 141);
+    default:
+        return RGB(142, 153, 169);
+    }
+}
+
+BYTE LightChannel(BYTE value)
+{
+    const int next = static_cast<int>(value) + 20;
+    return static_cast<BYTE>(next > 255 ? 255 : next);
 }
 }
 
@@ -149,8 +193,9 @@ void OverlayWindow::Hide()
 
 void OverlayWindow::Update(std::wstring state, std::wstring step)
 {
-    state_ = state.empty() ? L"Р вЂњР С•РЎвЂљР С•Р Р†" : CompactText(std::move(state), vertical_ ? 8 : 14);
-    step_ = step.empty() ? L"Р С›Р В¶Р С‘Р Т‘Р В°РЎР‹" : CompactText(std::move(step), vertical_ ? 8 : 24);
+    state_ = state.empty() ? L"Готов" : CompactText(std::move(state), vertical_ ? 16 : 18);
+    step_ = step.empty() ? L"Ожидаю команду" : CompactText(std::move(step), vertical_ ? 24 : 32);
+    status_ = StatusKind(state_);
     if (window_ != nullptr)
     {
         InvalidateRect(window_, nullptr, FALSE);
@@ -175,12 +220,8 @@ bool OverlayWindow::Visible() const noexcept
 
 bool OverlayWindow::OverOpenButton(POINT point) const
 {
-    if (vertical_)
-    {
-        const int left = (VerticalWidth - 24) / 2;
-        return point.x >= left && point.x < left + 24 && point.y >= VerticalHeight - 29 && point.y < VerticalHeight - 5;
-    }
-    return point.x >= HorizontalWidth - 36 && point.x < HorizontalWidth - 10 && point.y >= 12 && point.y < 38;
+    const int width = vertical_ ? VerticalWidth : HorizontalWidth;
+    return point.x >= width - 34 && point.x < width - 8 && point.y >= 8 && point.y < 34;
 }
 
 void OverlayWindow::RestoreMain()
@@ -196,76 +237,79 @@ void OverlayWindow::Paint(HDC target)
     const int width = bounds.right - bounds.left;
     const int height = bounds.bottom - bounds.top;
 
-    const HBRUSH background = CreateSolidBrush(RGB(6, 8, 11));
+    const HBRUSH background = CreateSolidBrush(RGB(8, 11, 16));
     FillRect(target, &bounds, background);
     DeleteObject(background);
 
-    const HBRUSH card = CreateSolidBrush(RGB(9, 12, 16));
-    const HPEN cardBorder = CreatePen(PS_SOLID, 1, RGB(32, 38, 47));
+    const HBRUSH card = CreateSolidBrush(status_ == 2 ? RGB(10, 10, 18) : RGB(8, 11, 16));
+    const HPEN cardBorder = CreatePen(PS_SOLID, 1, status_ == 4 ? RGB(83, 43, 48) : RGB(35, 42, 53));
     const auto oldCardBrush = SelectObject(target, card);
     const auto oldCardPen = SelectObject(target, cardBorder);
-    RoundRect(target, 0, 0, width, height, vertical_ ? 16 : 18, vertical_ ? 16 : 18);
+    RoundRect(target, 0, 0, width, height, 18, 18);
     SelectObject(target, oldCardPen);
     SelectObject(target, oldCardBrush);
     DeleteObject(cardBorder);
     DeleteObject(card);
 
-    const bool error = state_ == L"Р С›РЎв‚¬Р С‘Р В±Р С”Р В°";
-    const HBRUSH indicator = CreateSolidBrush(error ? RGB(218, 111, 111) : RGB(231, 236, 245));
-    const auto oldIndicatorBrush = SelectObject(target, indicator);
-    const auto oldIndicatorPen = SelectObject(target, GetStockObject(NULL_PEN));
-    if (vertical_)
-    {
-        Ellipse(target, width / 2 - 4, 9, width / 2 + 4, 17);
-    }
-    else
-    {
-        RoundRect(target, 12, 15, 16, height - 15, 4, 4);
-    }
-    SelectObject(target, oldIndicatorPen);
-    SelectObject(target, oldIndicatorBrush);
-    DeleteObject(indicator);
+    const COLORREF dotColor = DotColor(status_);
+    const HBRUSH dotGlow = CreateSolidBrush(RGB(LightChannel(GetRValue(dotColor)), LightChannel(GetGValue(dotColor)), LightChannel(GetBValue(dotColor))));
+    const auto oldGlowBrush = SelectObject(target, dotGlow);
+    const auto oldGlowPen = SelectObject(target, GetStockObject(NULL_PEN));
+    Ellipse(target, 10, height / 2 - 7, 24, height / 2 + 7);
+    SelectObject(target, oldGlowPen);
+    SelectObject(target, oldGlowBrush);
+    DeleteObject(dotGlow);
+
+    const HBRUSH dot = CreateSolidBrush(dotColor);
+    const auto oldDotBrush = SelectObject(target, dot);
+    const auto oldDotPen = SelectObject(target, GetStockObject(NULL_PEN));
+    Ellipse(target, 14, height / 2 - 4, 22, height / 2 + 4);
+    SelectObject(target, oldDotPen);
+    SelectObject(target, oldDotBrush);
+    DeleteObject(dot);
 
     SetBkMode(target, TRANSPARENT);
-    const HFONT title = CreateFontW(vertical_ ? -11 : -13, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+    const HFONT title = CreateFontW(-12, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Variable");
     const HFONT body = CreateFontW(-10, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
         CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI Variable");
 
     const auto previous = SelectObject(target, title);
-    SetTextColor(target, RGB(237, 241, 247));
-    RECT titleBounds = vertical_ ? RECT{5, 21, width - 5, 37} : RECT{24, 8, width - 44, 25};
-    DrawTextW(target, state_.c_str(), -1, &titleBounds, vertical_ ? DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS : DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
+    SetTextColor(target, RGB(244, 247, 251));
+    RECT titleBounds{32, 7, width - 42, 23};
+    DrawTextW(target, state_.c_str(), -1, &titleBounds, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
     SelectObject(target, body);
-    SetTextColor(target, RGB(124, 135, 150));
-    RECT stepBounds = vertical_ ? RECT{5, 35, width - 5, 47} : RECT{24, 25, width - 44, 41};
-    DrawTextW(target, step_.c_str(), -1, &stepBounds, vertical_ ? DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS : DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
+    SetTextColor(target, RGB(139, 150, 166));
+    RECT stepBounds{32, 21, width - 42, 36};
+    DrawTextW(target, step_.c_str(), -1, &stepBounds, DT_LEFT | DT_SINGLELINE | DT_END_ELLIPSIS | DT_VCENTER);
     SelectObject(target, previous);
     DeleteObject(title);
     DeleteObject(body);
 
-    const int buttonSize = vertical_ ? 24 : 26;
-    const int buttonLeft = vertical_ ? (width - buttonSize) / 2 : width - 36;
-    const int buttonTop = vertical_ ? height - 29 : 12;
+    const int buttonLeft = width - 34;
+    const int buttonTop = 8;
     const HBRUSH button = CreateSolidBrush(RGB(15, 19, 25));
-    const HPEN border = CreatePen(PS_SOLID, 1, RGB(42, 49, 60));
+    const HPEN border = CreatePen(PS_SOLID, 1, RGB(43, 50, 62));
     const auto oldBrush = SelectObject(target, button);
     const auto oldPen = SelectObject(target, border);
-    RoundRect(target, buttonLeft, buttonTop, buttonLeft + buttonSize, buttonTop + buttonSize, 9, 9);
+    RoundRect(target, buttonLeft, buttonTop, buttonLeft + 26, buttonTop + 26, 10, 10);
     SelectObject(target, oldPen);
     SelectObject(target, oldBrush);
     DeleteObject(border);
     DeleteObject(button);
 
-    const HPEN arrow = CreatePen(PS_SOLID, 2, RGB(185, 196, 211));
-    const auto oldArrow = SelectObject(target, arrow);
-    MoveToEx(target, buttonLeft + 7, buttonTop + buttonSize - 8, nullptr);
-    LineTo(target, buttonLeft + buttonSize - 7, buttonTop + 7);
-    MoveToEx(target, buttonLeft + 10, buttonTop + 7, nullptr);
-    LineTo(target, buttonLeft + buttonSize - 7, buttonTop + 7);
-    LineTo(target, buttonLeft + buttonSize - 7, buttonTop + 10);
-    SelectObject(target, oldArrow);
-    DeleteObject(arrow);
+    const HBRUSH dots = CreateSolidBrush(RGB(174, 184, 199));
+    const auto oldDotsBrush = SelectObject(target, dots);
+    const auto oldDotsPen = SelectObject(target, GetStockObject(NULL_PEN));
+    const int centerY = buttonTop + 13;
+    for (int i = 0; i < 3; ++i)
+    {
+        const int centerX = buttonLeft + 9 + i * 4;
+        Ellipse(target, centerX - 1, centerY - 1, centerX + 2, centerY + 2);
+    }
+    SelectObject(target, oldDotsPen);
+    SelectObject(target, oldDotsBrush);
+    DeleteObject(dots);
 }
 
 LRESULT CALLBACK OverlayWindow::StaticWindowProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)

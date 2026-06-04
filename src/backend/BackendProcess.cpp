@@ -41,6 +41,24 @@ std::wstring BackendProcess::GenerateToken() const
     return token.str();
 }
 
+std::wstring ResolveExecutable(const wchar_t* name)
+{
+    const DWORD length = SearchPathW(nullptr, name, nullptr, 0, nullptr, nullptr);
+    if (length == 0)
+    {
+        return {};
+    }
+
+    std::wstring path(length, L'\0');
+    const DWORD written = SearchPathW(nullptr, name, nullptr, length, path.data(), nullptr);
+    if (written == 0 || written >= length)
+    {
+        return {};
+    }
+    path.resize(written);
+    return path;
+}
+
 std::wstring BackendProcess::ResolvePython() const
 {
     const auto backend = core::Paths::BackendDirectory();
@@ -50,7 +68,12 @@ std::wstring BackendProcess::ResolvePython() const
         return visible.wstring();
     }
 
-    throw std::runtime_error("Python backend environment is missing. Run scripts/setup.ps1 first.");
+    if (const auto python = ResolveExecutable(L"python.exe"); !python.empty())
+    {
+        return python;
+    }
+
+    throw std::runtime_error("Python backend environment is missing. Run scripts/setup.ps1 first or install Python 3.11+.");
 }
 
 void BackendProcess::Start()

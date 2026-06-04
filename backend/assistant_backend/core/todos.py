@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,25 +13,29 @@ class TodoStore:
     def __init__(self, data_dir: Path) -> None:
         self._path = data_dir / "organizer.db"
         data_dir.mkdir(parents=True, exist_ok=True)
-        self._connection = sqlite3.connect(self._path)
-        self._connection.row_factory = sqlite3.Row
-        self._connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS todo_items (
-                id TEXT PRIMARY KEY,
-                kind TEXT NOT NULL,
-                title TEXT NOT NULL,
-                body TEXT NOT NULL,
-                status TEXT NOT NULL,
-                priority TEXT NOT NULL,
-                due_at TEXT NOT NULL,
-                tags TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+        with closing(self._connect()) as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS todo_items (
+                    id TEXT PRIMARY KEY,
+                    kind TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    priority TEXT NOT NULL,
+                    due_at TEXT NOT NULL,
+                    tags TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
             )
-            """
-        )
-        self._connection.commit()
+            connection.commit()
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self._path)
+        connection.row_factory = sqlite3.Row
+        return connection
 
     @staticmethod
     def _now() -> str:
@@ -70,10 +75,11 @@ class TodoStore:
             token = f"%{query.strip()}%"
             values.extend([token, token, token])
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        rows = self._connection.execute(
-            f"SELECT * FROM todo_items{where} ORDER BY CASE status WHEN 'todo' THEN 0 WHEN 'later' THEN 1 ELSE 2 END, CASE priority WHEN 'important' THEN 0 ELSE 1 END, updated_at DESC",
-            values,
-        ).fetchall()
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                f"SELECT * FROM todo_items{where} ORDER BY CASE status WHEN 'todo' THEN 0 WHEN 'later' THEN 1 ELSE 2 END, CASE priority WHEN 'important' THEN 0 ELSE 1 END, updated_at DESC",
+                values,
+            ).fetchall()
         return [self._row(row) for row in rows]
 
     def create(self, title: str, body: str = "", kind: str = "task", status: str = "todo", priority: str = "normal", due_at: str = "", tags: list[str] | None = None) -> dict[str, Any]:
@@ -94,12 +100,14 @@ class TodoStore:
             now,
             now,
         )
-        self._connection.execute("INSERT INTO todo_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", value)
-        self._connection.commit()
+        with closing(self._connect()) as connection:
+            connection.execute("INSERT INTO todo_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", value)
+            connection.commit()
         return self.get(item_id)
 
     def get(self, item_id: str) -> dict[str, Any]:
-        row = self._connection.execute("SELECT * FROM todo_items WHERE id = ?", (item_id,)).fetchone()
+        with closing(self._connect()) as connection:
+            row = connection.execute("SELECT * FROM todo_items WHERE id = ?", (item_id,)).fetchone()
         if row is None:
             raise RuntimeError("Задача или заметка не найдена.")
         return self._row(row)
@@ -112,33 +120,37 @@ class TodoStore:
         if not title:
             raise RuntimeError("Заголовок не может быть пустым.")
         tags = merged["tags"] if isinstance(merged["tags"], list) else []
-        self._connection.execute(
-            "UPDATE todo_items SET kind = ?, title = ?, body = ?, status = ?, priority = ?, due_at = ?, tags = ?, updated_at = ? WHERE id = ?",
-            (
-                self._normalize_kind(str(merged["kind"])),
-                title[:180],
-                str(merged["body"]).strip()[:8000],
-                self._normalize_status(str(merged["status"])),
-                self._normalize_priority(str(merged["priority"])),
-                str(merged["due_at"] or "").strip()[:64],
-                json.dumps([str(tag).strip() for tag in tags if str(tag).strip()][:12], ensure_ascii=False),
-                self._now(),
-                item_id,
-            ),
-        )
-        self._connection.commit()
+        with closing(self._connect()) as connection:
+            connection.execute(
+                "UPDATE todo_items SET kind = ?, title = ?, body = ?, status = ?, priority = ?, due_at = ?, tags = ?, updated_at = ? WHERE id = ?",
+                (
+                    self._normalize_kind(str(merged["kind"])),
+                    title[:180],
+                    str(merged["body"]).strip()[:8000],
+                    self._normalize_status(str(merged["status"])),
+                    self._normalize_priority(str(merged["priority"])),
+                    str(merged["due_at"] or "").strip()[:64],
+                    json.dumps([str(tag).strip() for tag in tags if str(tag).strip()][:12], ensure_ascii=False),
+                    self._now(),
+                    item_id,
+                ),
+            )
+            connection.commit()
         return self.get(item_id)
 
     def delete(self, item_id: str) -> None:
-        if self._connection.execute("SELECT id FROM todo_items WHERE id = ?", (item_id,)).fetchone() is None:
-            raise RuntimeError("Задача или заметка не найдена.")
-        self._connection.execute("DELETE FROM todo_items WHERE id = ?", (item_id,))
-        self._connection.commit()
+        with closing(self._connect()) as connection:
+            if connection.execute("SELECT id FROM todo_items WHERE id = ?", (item_id,)).fetchone() is None:
+                raise RuntimeError("Задача или заметка не найдена.")
+            connection.execute("DELETE FROM todo_items WHERE id = ?", (item_id,))
+            connection.commit()
 
     def summary(self) -> dict[str, int]:
-        rows = self._connection.execute("SELECT status, COUNT(*) AS count FROM todo_items GROUP BY status").fetchall()
+        with closing(self._connect()) as connection:
+            rows = connection.execute("SELECT status, COUNT(*) AS count FROM todo_items GROUP BY status").fetchall()
+            important = connection.execute("SELECT COUNT(*) FROM todo_items WHERE priority = 'important' AND status != 'done'").fetchone()[0]
         values = {"todo": 0, "later": 0, "done": 0}
         for row in rows:
             values[row["status"]] = int(row["count"])
-        values["important"] = int(self._connection.execute("SELECT COUNT(*) FROM todo_items WHERE priority = 'important' AND status != 'done'").fetchone()[0])
+        values["important"] = int(important)
         return values

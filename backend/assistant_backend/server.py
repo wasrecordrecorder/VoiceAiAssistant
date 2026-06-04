@@ -77,7 +77,8 @@ class AssistantServer:
                 await self._events.emit("settings.current", self._runtime.settings())
             elif command == "settings.save":
                 settings = self._settings.update(payload)
-                await self._runtime.refresh_settings()
+                if set(payload) != {"ui_mode"}:
+                    await self._runtime.refresh_settings()
                 await self._events.emit("settings.current", settings)
                 await self._events.emit("providers.catalog", self._runtime.catalog())
                 await self._events.emit("audio.devices", self._runtime.devices())
