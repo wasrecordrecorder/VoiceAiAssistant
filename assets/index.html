@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebViewDA Voice</title>
+    <link rel="stylesheet" href="styles/main.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="titlebar" id="dragRegion">
+        <div class="identity">
+          <span class="identity-mark"></span>
+          <span>WebViewDA Voice</span>
+          <span class="provider-pill" id="providerPill">offline</span>
+        </div>
+        <div class="title-actions">
+          <div class="mode-switch" id="modeSwitch" aria-label="Режим интерфейса">
+            <button class="mode-option active" id="voiceModeButton" type="button" aria-label="Голосовой режим">
+              <svg class="outline-icon" viewBox="0 0 24 24"><path d="M12 15.3a3.8 3.8 0 0 0 3.8-3.8V6.8a3.8 3.8 0 0 0-7.6 0v4.7a3.8 3.8 0 0 0 3.8 3.8Z"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21"/></svg>
+            </button>
+            <button class="mode-option" id="textModeButton" type="button" aria-label="Текстовый режим">
+              <svg class="outline-icon" viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 3v-14Z"/><path d="M8 10h8M8 13h5"/></svg>
+            </button>
+          </div>
+          <button class="title-button organizer-button" id="organizerOpen" aria-label="Задачи и память">
+            <svg class="outline-icon" viewBox="0 0 24 24"><path d="M8 4.5h8M9 3h6a1 1 0 0 1 1 1v2H8V4a1 1 0 0 1 1-1Z"/><path d="M6 5.5h12a1.5 1.5 0 0 1 1.5 1.5v13A1.5 1.5 0 0 1 18 21.5H6A1.5 1.5 0 0 1 4.5 20V7A1.5 1.5 0 0 1 6 5.5Z"/><path d="m8 11 1.5 1.5L12 10M8 16h8"/></svg>
+            <span class="todo-badge hidden" id="todoBadge"></span>
+          </button>
+          <button class="title-button" id="settingsOpen" aria-label="Настройки">
+            <svg class="outline-icon" viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/><path d="M9 5v4M15 10v4M11 15v4"/></svg>
+          </button>
+          <button class="title-button" id="minimizeButton" aria-label="Свернуть">
+            <svg class="outline-icon" viewBox="0 0 24 24"><path d="M6 12h12"/></svg>
+          </button>
+          <button class="title-button close" id="closeButton" aria-label="Скрыть в трей">
+            <svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <section class="text-workspace hidden" id="textWorkspace">
+        <aside class="chat-sidebar" id="chatSidebar">
+          <div class="chat-sidebar-head">
+            <button class="sidebar-icon" id="sidebarToggle" type="button" aria-label="Свернуть боковую панель">
+              <svg class="outline-icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M9 5v14"/></svg>
+            </button>
+            <div class="sidebar-head-copy">
+              <span class="sidebar-eyebrow">workspace</span>
+              <strong class="sidebar-caption">Чаты</strong>
+            </div>
+            <button class="sidebar-icon strong" id="textNewSession" type="button" aria-label="Новый чат">
+              <svg class="outline-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
+          <label class="sidebar-search" aria-label="Поиск по чатам">
+            <svg class="outline-icon" viewBox="0 0 24 24"><path d="m21 21-4.2-4.2"/><circle cx="11" cy="11" r="6"/></svg>
+            <input id="sessionSearch" type="text" placeholder="Поиск по чатам">
+          </label>
+          <button class="archive-filter" id="showArchivedSessions" type="button">
+            <span>Активные чаты</span>
+            <small id="archiveCount">0</small>
+          </button>
+          <div class="session-list" id="sessionList"></div>
+        </aside>
+        <section class="chat-stage" id="chatDropZone">
+          <header class="chat-header">
+            <div class="chat-title-group">
+              <div class="chat-title-line">
+                <h2 id="activeChatTitle">Новый диалог</h2>
+                <span class="chat-status" id="chatStatus">Готов</span>
+              </div>
+              <div class="chat-meta-row">
+                <span class="meta-pill">Текстовый режим</span>
+                <span class="meta-pill">Агент и код</span>
+                <span class="meta-pill" id="chatHint">Вложения, правки файлов и инструменты</span>
+              </div>
+            </div>
+          </header>
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-empty" id="chatEmpty">
+              <div class="chat-empty-mark">
+                <svg class="outline-icon" viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 3v-14Z"/><path d="M8 10h8M8 13h5"/></svg>
+              </div>
+              <strong>Новый рабочий чат</strong>
+              <p>Напишите задачу, перетащите файл или прикрепите скриншот через кнопку плюс.</p>
+            </div>
+          </div>
+          <form class="text-composer" id="textPromptForm">
+            <div class="drop-overlay hidden" id="dropOverlay">Отпустите файлы, чтобы прикрепить их к сообщению</div>
+            <div class="attachment-strip hidden" id="attachmentStrip"></div>
+            <input class="hidden" id="attachmentFileInput" type="file" multiple>
+            <input class="hidden" id="attachmentImageInput" type="file" accept="image/*" multiple>
+            <div class="attach-menu hidden" id="attachMenu">
+              <div class="attach-menu-title">Вложение и поиск</div>
+              <button class="attach-menu-item" id="attachFileButton" type="button"><svg class="outline-icon" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v5h5"/></svg><span>Добавить файл</span></button>
+              <button class="attach-menu-item" id="attachImageButton" type="button"><svg class="outline-icon" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><circle cx="9" cy="10" r="2"/><path d="m6 17 4-4 3 3 2-2 3 3"/></svg><span>Добавить фото</span></button>
+              <label class="attach-web-toggle"><input id="textWebSearch" type="checkbox" checked><span>Разрешить веб-поиск для этого запроса</span></label>
+            </div>
+            <span class="composer-status hidden" id="composerStatusLabel">Готов к отправке</span>
+            <div class="composer-island">
+              <button class="island-button add" id="attachButton" type="button" aria-label="Добавить вложение или включить веб-поиск">
+                <svg class="outline-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+              <select class="hidden" id="textThinkingMode" aria-label="Мышление и агенты">
+                <option value="off:standard">Fast</option>
+                <option value="medium:standard">Balanced</option>
+                <option value="high:standard">Deep</option>
+                <option value="high:hermes_duo">Hermes Duo</option>
+              </select>
+              <div class="thinking-control" id="thinkingControl">
+                <button class="thinking-trigger" id="thinkingTrigger" type="button" aria-label="Выбрать режим мышления">
+                  <span id="thinkingLabel">Deep</span>
+                  <svg class="outline-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="thinking-menu hidden" id="thinkingMenu">
+                  <button type="button" data-value="off:standard"><strong>Fast</strong><span>Быстро, без глубокого разбора</span></button>
+                  <button type="button" data-value="medium:standard"><strong>Balanced</strong><span>Нормальный баланс скорости и качества</span></button>
+                  <button type="button" data-value="high:standard"><strong>Deep</strong><span>Глубокое мышление для сложных задач</span></button>
+                  <button type="button" data-value="high:hermes_duo"><strong>Hermes Duo</strong><span>Кодер и проверка для проектных задач</span></button>
+                </div>
+              </div>
+              <button class="island-button" id="dictateButton" type="button" aria-label="Диктовать текст через Whisper">
+                <svg class="outline-icon" viewBox="0 0 24 24"><path d="M12 15.3a3.8 3.8 0 0 0 3.8-3.8V6.8a3.8 3.8 0 0 0-7.6 0v4.7a3.8 3.8 0 0 0 3.8 3.8Z"/><path d="M6 11.5a6 6 0 0 0 12 0M12 17.5V21"/></svg>
+              </button>
+              <textarea id="textPrompt" rows="1" placeholder="Сообщение для ассистента"></textarea>
+              <button class="island-send" type="submit" aria-label="Отправить">
+                <svg class="outline-icon" viewBox="0 0 24 24"><path d="M21 3 3.8 10.2l7 1.7 1.7 7L21 3Z"/><path d="m10.8 11.9 5-5"/></svg>
+              </button>
+            </div>
+          </form>
+        </section>
+      </section>
+
+      <section class="hero">
+        <div class="orb-shell">
+          <div class="orb-aura"></div>
+          <canvas class="orb" id="orb" width="340" height="340"></canvas>
+        </div>
+        <div class="state-stack">
+          <h1 id="stateTitle">Запуск</h1>
+          <p class="state-detail" id="stateDetail">Подключаю backend</p>
+          <p class="live-transcript hidden" id="liveTranscript"></p>
+        </div>
+        <div class="voice-actions">
+          <button class="voice-action" id="prepareVoice">Подготовить голос</button>
+          <button class="voice-action" id="testVoiceInline">Проверить звук</button>
+          <span class="model-status hidden" id="modelStatus"></span>
+        </div>
+      </section>
+
+      <section class="activity">
+        <div class="activity-head">
+          <span>Ход работы</span>
+          <div class="activity-actions">
+            <button class="text-action" id="newSession">новый</button>
+            <button class="text-action" id="clearSteps">очистить</button>
+          </div>
+        </div>
+        <div class="subagent-rail hidden" id="subagentRail"></div>
+        <div class="steps" id="steps">
+          <div class="empty" id="stepsEmpty">Действия, ответы и ошибки появятся здесь</div>
+        </div>
+      </section>
+
+      <section class="composer">
+        <button class="round-button" id="listenButton" aria-label="Слушать">
+          <svg viewBox="0 0 24 24"><path d="M12 15.3a3.8 3.8 0 0 0 3.8-3.8V6.8a3.8 3.8 0 0 0-7.6 0v4.7a3.8 3.8 0 0 0 3.8 3.8Zm-7-3.8a1 1 0 0 1 2 0 5 5 0 0 0 10 0 1 1 0 1 1 2 0 7 7 0 0 1-6 6.9V21h2.2a1 1 0 0 1 0 2H8.8a1 1 0 1 1 0-2H11v-2.6a7 7 0 0 1-6-6.9Z"/></svg>
+        </button>
+        <form class="input-wrap" id="promptForm">
+          <input id="prompt" type="text" placeholder="Спросите или дайте задачу" autocomplete="off">
+          <button class="send" type="submit" aria-label="Отправить">
+            <svg viewBox="0 0 24 24"><path d="M21 3 3.8 10.2c-.9.4-.8 1.7.2 2l6.6 1.4L12 20c.2 1 1.6 1.3 2.1.4L21.9 4.5C22.4 3.5 21.5 2.6 21 3Zm-8.3 13.8-.8-4 5.4-5.4-6.8 4.3-3.1-.7 11-4.6-5.7 10.4Z"/></svg>
+          </button>
+        </form>
+        <button class="round-button stop" id="stopButton" aria-label="Остановить">
+          <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></svg>
+        </button>
+      </section>
+      <aside class="media-dock hidden" id="mediaDock" aria-hidden="true">
+        <div class="media-frame"><div id="youtubePlayer"></div></div>
+        <div class="media-footer">
+          <div class="media-meta">
+            <span>Сейчас играет</span>
+            <strong id="mediaTitle">Музыка</strong>
+          </div>
+          <div class="media-actions">
+            <button class="media-button" id="mediaToggle" aria-label="Пауза или продолжить">Ⅱ</button>
+            <button class="media-button" id="mediaExpand" aria-label="Развернуть">□</button>
+            <button class="media-button" id="mediaStop" aria-label="Остановить">×</button>
+          </div>
+        </div>
+      </aside>
+      <aside class="visualizer hidden" id="visualizerPanel" aria-hidden="true">
+        <div class="visualizer-head">
+          <strong id="visualizerTitle">Визуализация</strong>
+          <button class="title-button" id="visualizerClose" aria-label="Закрыть"><svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+        </div>
+        <div class="visualizer-surface" id="visualizerSurface"></div>
+      </aside>
+    </main>
+
+    <aside class="organizer" id="organizerPanel" aria-hidden="true">
+      <div class="organizer-header">
+        <div>
+          <h2>Органайзер</h2>
+          <p id="todoSummary">Задачи и память</p>
+        </div>
+        <button class="title-button" id="organizerClose" aria-label="Закрыть"><svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      </div>
+      <div class="organizer-tabs">
+        <button class="organizer-tab active" id="todoTab">Задачи</button>
+        <button class="organizer-tab" id="memoryTab">Память</button>
+      </div>
+      <section class="organizer-section" id="todoSection">
+        <div class="filter-row">
+          <button class="filter active" data-filter="">Все</button>
+          <button class="filter" data-filter="todo">Надо</button>
+          <button class="filter" data-filter="later">Потом</button>
+          <button class="filter" data-filter="done">Готово</button>
+        </div>
+        <form class="card-form" id="todoForm">
+          <div class="pair">
+            <select id="todoKind"><option value="task">Задача</option><option value="note">Заметка</option></select>
+            <select id="todoPriority"><option value="normal">Обычно</option><option value="important">Важно</option></select>
+          </div>
+          <input id="todoTitle" type="text" placeholder="Заголовок" required>
+          <textarea id="todoBody" placeholder="Суть или детали"></textarea>
+          <button class="primary" type="submit">Добавить</button>
+        </form>
+        <div class="organizer-list" id="todoList"></div>
+      </section>
+      <section class="organizer-section hidden" id="memorySection">
+        <div class="memory-meter"><span id="memoryMeter"></span></div>
+        <p class="memory-path" id="memoryPath"></p>
+        <form class="card-form" id="memoryForm">
+          <div class="pair">
+            <select id="memoryCategory"><option value="preference">Предпочтение</option><option value="fact">Факт</option><option value="instruction">Инструкция</option><option value="context">Контекст</option></select>
+            <select id="memoryImportance"><option value="3">Обычная</option><option value="4">Важная</option><option value="5">Ключевая</option><option value="2">Низкая</option></select>
+          </div>
+          <textarea id="memoryText" placeholder="Что ассистент должен запомнить" required></textarea>
+          <button class="primary" type="submit">Запомнить</button>
+        </form>
+        <div class="organizer-list" id="memoryList"></div>
+      </section>
+    </aside>
+
+    <aside class="settings" id="settingsPanel" aria-hidden="true">
+      <div class="settings-header">
+        <h2>Настройки</h2>
+        <button class="title-button" id="settingsClose" aria-label="Закрыть"><svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      </div>
+      <div class="settings-body">
+        <div class="section-label">Модель</div>
+        <label class="field">
+          <span>Провайдер</span>
+          <select id="provider">
+            <option value="openrouter">OpenRouter</option>
+            <option value="opencode_zen">OpenCode Zen</option>
+            <option value="opencode_go">OpenCode Go</option>
+            <option value="freemodel_gpt">FreeModel GPT</option>
+            <option value="ollama">Ollama local</option>
+            <option value="custom">Custom endpoint</option>
+          </select>
+        </label>
+        <label class="field catalog-model-row hidden">
+          <span>Модель</span>
+          <select id="catalogModel"></select>
+        </label>
+        <label class="field text-model-row">
+          <span>Модель</span>
+          <input id="model" type="text" placeholder="openai/gpt-4.1-mini">
+        </label>
+        <label class="field ollama-row hidden">
+          <span>Ollama URL</span>
+          <input id="ollamaBaseUrl" type="text" placeholder="http://localhost:11434">
+        </label>
+        <p class="hint" id="providerHint"></p>
+        <div class="pair">
+          <label class="field">
+            <span>Мышление модели</span>
+            <select id="reasoningEffort">
+              <option value="off">Выключено</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label class="toggle inline-toggle reasoning-visible">
+            <input id="reasoningVisible" type="checkbox">
+            <span>Показывать reasoning модели, если API вернёт его</span>
+          </label>
+        </div>
+        <label class="field">
+          <span>API key</span>
+          <input id="apiKey" type="password" placeholder="Сохранится в защищённом хранилище Windows">
+        </label>
+        <label class="field custom-row hidden">
+          <span>Base URL</span>
+          <input id="customBaseUrl" type="text" placeholder="https://api.example.com/v1">
+        </label>
+        <label class="field custom-row hidden">
+          <span>API protocol</span>
+          <select id="customProtocol">
+            <option value="chat">Chat Completions</option>
+            <option value="responses">Responses</option>
+            <option value="messages">Messages</option>
+          </select>
+        </label>
+
+        <div class="divider"></div>
+        <div class="section-label">Речь</div>
+        <label class="field">
+          <span>Профиль нагрузки</span>
+          <select id="voiceProfile">
+            <option value="lite">Lite · Vosk</option>
+            <option value="fast">Fast · Whisper base</option>
+            <option value="balanced">Balanced · Whisper small</option>
+          </select>
+        </label>
+        <div class="pair">
+          <label class="field">
+            <span>STT</span>
+            <select id="sttEngine">
+              <option value="faster-whisper">Whisper</option>
+              <option value="vosk">Vosk Lite</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>VAD</span>
+            <select id="vadEngine">
+              <option value="silero">Silero</option>
+              <option value="webrtc">WebRTC</option>
+            </select>
+          </label>
+        </div>
+        <div class="pair">
+          <label class="field">
+            <span>Активация</span>
+            <select id="activationMode">
+              <option value="wake">По ключевой фразе</option>
+              <option value="manual">Только кнопкой</option>
+              <option value="continuous">Всегда отвечать</option>
+              <option value="ptt">Рация · удерживать кнопку</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Диалог после активации, сек.</span>
+            <input id="followUpSeconds" type="number" min="4" max="120" step="1">
+          </label>
+        </div>
+        <label class="field wake-row">
+          <span>Ключевые фразы через запятую</span>
+          <input id="wakePhrases" type="text" placeholder="ассистент, вебви">
+        </label>
+        <label class="field ptt-row hidden">
+          <span>Кнопка рации</span>
+          <div class="bind-field">
+            <input id="pttKey" type="text" readonly value="F8">
+            <button id="pttRecord" class="ghost bind-capture" type="button">Назначить</button>
+          </div>
+          <small class="hint">Можно назначить любую клавишу или сочетание, например Ctrl + Space.</small>
+        </label>
+        <label class="toggle">
+          <input id="noiseSuppression" type="checkbox">
+          <span>Адаптивное подавление фонового шума</span>
+        </label>
+        <label class="field">
+          <span>Сила шумоподавления</span>
+          <input id="noiseStrength" type="range" min="0" max="0.95" step="0.05">
+        </label>
+        <div class="pair">
+          <label class="field">
+            <span>Пауза окончания фразы, мс</span>
+            <input id="utteranceSilenceMs" type="number" min="400" max="4000" step="50">
+          </label>
+          <label class="field">
+            <span>Максимум речи, сек.</span>
+            <input id="utteranceMaxSeconds" type="number" min="10" max="600" step="10">
+          </label>
+        </div>
+        <p class="hint">Для длинной диктовки поставьте паузу от 1800 до 2500 миллисекунд. В режиме рации фраза отправляется после отпускания кнопки.</p>
+        <label class="field whisper-row">
+          <span>Whisper model</span>
+          <select id="sttModel">
+            <option value="tiny">tiny · минимальная нагрузка</option>
+            <option value="base">base · быстро</option>
+            <option value="small">small · баланс</option>
+            <option value="medium">medium · точнее</option>
+            <option value="large-v3">large-v3 · максимум качества</option>
+            <option value="turbo">turbo · высокая точность и быстрее large-v3</option>
+          </select>
+        </label>
+        <p class="hint whisper-row">medium, large-v3 и turbo загружаются дольше и требуют больше памяти. Для русского текста выбирайте их только если компьютер справляется.</p>
+        <label class="field vosk-row hidden">
+          <span>Папка Vosk model</span>
+          <input id="voskPath" type="text" placeholder="C:\models\vosk-model-small-ru-0.22">
+        </label>
+        <label class="field">
+          <span>Микрофон</span>
+          <select id="inputDevice"><option value="">Системный по умолчанию</option></select>
+        </label>
+        <label class="field">
+          <span>Динамики</span>
+          <select id="outputDevice"><option value="">Системные по умолчанию</option></select>
+        </label>
+        <label class="toggle">
+          <input id="echoGuard" type="checkbox">
+          <span>Не слушать микрофон во время озвучки</span>
+        </label>
+        <label class="toggle">
+          <input id="bargeIn" type="checkbox">
+          <span>Разрешить перебивание голосом</span>
+        </label>
+        <label class="toggle">
+          <input id="partialTranscription" type="checkbox">
+          <span>Показывать распознавание во время речи</span>
+        </label>
+        <label class="field">
+          <span>Интервал partial, мс</span>
+          <input id="partialInterval" type="number" min="450" max="3000" step="50">
+        </label>
+
+        <div class="divider"></div>
+        <div class="section-label">Агент</div>
+        <label class="toggle">
+          <input id="agentEnabled" type="checkbox">
+          <span>Разрешить модели работать с проектом и Windows</span>
+        </label>
+        <label class="field">
+          <span>Рабочая папка</span>
+          <input id="workspacePath" type="text" placeholder="C:\Projects\MyProject">
+        </label>
+        <div class="pair">
+          <label class="field">
+            <span>Максимум шагов</span>
+            <input id="agentMaxSteps" type="number" min="1" max="256" step="1">
+          </label>
+          <label class="field">
+            <span>Таймаут команды</span>
+            <input id="agentCommandTimeout" type="number" min="1" max="180" step="1">
+          </label>
+        </div>
+        <label class="field">
+          <span>Параллельных субагентов</span>
+          <input id="subagentMaxParallel" type="number" min="1" max="3" step="1">
+        </label>
+        <p class="hint">Максимум шагов теперь до двухсот пятидесяти шести. Режим Hermes Duo можно выбрать прямо в текстовом поле: Hermes_Coder готовит изменение, QA-Tester ищет регрессии.</p>
+        <label class="toggle warning">
+          <input id="agentAllowEdits" type="checkbox">
+          <span>Править файлы без подтверждения</span>
+        </label>
+        <label class="toggle warning">
+          <input id="agentAllowCommands" type="checkbox">
+          <span>Запускать команды без подтверждения</span>
+        </label>
+        <p class="hint">Чтение проекта и безопасные статусы доступны сразу. Открытие, команды и удаление требуют подтверждения, пока вы явно не разрешите их без запросов.</p>
+        <label class="toggle">
+          <input id="screenVisionEnabled" type="checkbox">
+          <span>Разрешить инструмент просмотра экрана для vision-моделей</span>
+        </label>
+        <label class="toggle warning">
+          <input id="screenCaptureWithoutConfirmation" type="checkbox">
+          <span>Снимок экрана без подтверждения</span>
+        </label>
+        <p class="hint">Если включено, модель сможет запросить полный снимок экрана. Без второго флажка каждый снимок подтверждается вручную.</p>
+        <label class="toggle">
+          <input id="trayWidgetEnabled" type="checkbox">
+          <span>Показывать компактный статус-виджет при скрытии в трей</span>
+        </label>
+        <label class="field">
+          <span>Ориентация виджета</span>
+          <select id="widgetOrientation">
+            <option value="horizontal">Горизонтальный</option>
+            <option value="vertical">Вертикальный</option>
+          </select>
+        </label>
+
+        <div class="divider"></div>
+        <div class="section-label">Память</div>
+        <label class="toggle">
+          <input id="memoryEnabled" type="checkbox">
+          <span>Использовать долговременную память</span>
+        </label>
+        <label class="field">
+          <span>Лимит memory.md, символов</span>
+          <input id="memoryMaxChars" type="number" min="2000" max="50000" step="1000">
+        </label>
+        <p class="hint">Память хранится локально в Markdown и автоматически ограничивается по размеру. Менее важные старые записи удаляются первыми.</p>
+
+        <div class="divider"></div>
+        <div class="section-label">Озвучка</div>
+        <label class="toggle">
+          <input id="ttsEnabled" type="checkbox">
+          <span>Озвучивать ответы</span>
+        </label>
+        <div class="pair">
+          <label class="field">
+            <span>Движок</span>
+            <select id="ttsEngine">
+              <option value="edge">Microsoft Neural · online</option>
+              <option value="silero">Silero · offline</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Голос</span>
+            <select id="ttsVoice"></select>
+          </label>
+        </div>
+        <label class="field">
+          <span>Скорость</span>
+          <input id="ttsSpeed" type="number" min="0.7" max="1.35" step="0.05">
+        </label>
+        <div class="pair">
+          <label class="field">
+            <span>Предзагрузка речи, мс</span>
+            <input id="ttsPrefetchMs" type="number" min="0" max="1000" step="10">
+          </label>
+          <label class="field">
+            <span>Пласт текста, символов</span>
+            <input id="ttsBatchChars" type="number" min="80" max="1000" step="20">
+          </label>
+        </div>
+        <p class="hint">Microsoft Neural звучит естественнее и начинает говорить быстрее, но требует интернет. Silero работает локально.</p>
+        <label class="toggle">
+          <input id="autoListen" type="checkbox">
+          <span>Слушать автоматически после запуска</span>
+        </label>
+      </div>
+      <div class="settings-actions triple">
+        <button class="ghost" id="preloadModels">Загрузить модели</button>
+        <button class="ghost" id="testVoice">Голос</button>
+        <button class="primary" id="saveSettings">Сохранить</button>
+      </div>
+    </aside>
+    <section class="approval hidden" id="approvalPanel" aria-live="assertive">
+      <div class="approval-label">Требуется подтверждение</div>
+      <h3 id="approvalSummary"></h3>
+      <pre id="approvalDetails"></pre>
+      <div class="approval-actions">
+        <button class="ghost" id="approvalReject">Отклонить</button>
+        <button class="primary" id="approvalAccept">Разрешить один раз</button>
+      </div>
+    </section>
+    <section class="setup hidden" id="setupPanel" aria-live="polite">
+      <div class="setup-head">
+        <div>
+          <div class="setup-eyebrow">Voice setup</div>
+          <h2>Подготовка голоса</h2>
+        </div>
+        <button class="title-button" id="setupClose" aria-label="Закрыть"><svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      </div>
+      <p class="setup-copy">STT/VAD загружаются локально. Microsoft Neural TTS работает через интернет, Silero — локально. Озвучку можно проверить без AI-провайдера.</p>
+      <div class="progress-track"><span id="setupProgress"></span></div>
+      <div class="setup-components">
+        <div class="component" id="component-vad"><span>VAD</span><strong>Ожидает</strong></div>
+        <div class="component" id="component-stt"><span>STT</span><strong>Ожидает</strong></div>
+        <div class="component" id="component-tts"><span>TTS</span><strong>Ожидает</strong></div>
+      </div>
+      <pre class="setup-error hidden" id="setupError"></pre>
+      <div class="setup-actions">
+        <button class="ghost" id="setupTestVoice">Проверить озвучку</button>
+        <button class="primary" id="setupRetry">Подготовить</button>
+      </div>
+    </section>
+    <section class="error-toast hidden" id="errorToast" aria-live="assertive">
+      <div>
+        <strong id="errorTitle">Ошибка</strong>
+        <p id="errorText"></p>
+      </div>
+      <button class="title-button" id="errorClose" aria-label="Закрыть"><svg class="outline-icon" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+    </section>
+    <div class="shade" id="shade"></div>
+    <script type="module" src="scripts/app.js"></script>
+  </body>
+</html>

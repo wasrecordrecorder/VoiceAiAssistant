@@ -1,0 +1,11 @@
+#pragma once
+
+#include <string_view>
+
+namespace webviewda::core
+{
+inline constexpr std::string_view ProductName = "WebViewDA Voice";
+inline constexpr std::wstring_view ProductNameWide = L"WebViewDA Voice";
+inline constexpr std::string_view ProductVersion = "@PROJECT_VERSION@";
+inline constexpr unsigned short BackendPort = 48761;
+}

@@ -1,0 +1,7 @@
+WebViewDA v0.21.0
+
+- Reworked text chat composer: compact plus, custom thinking picker, mic, input and send layout.
+- Improved chat sidebar and made chat delete/archive/rename controls visible and clickable.
+- Reworked chat bubbles, streaming caret, thinking animation, tool call cards and attachment previews.
+- Reduced and redesigned tray overlay widget.
+- Added Ollama local provider through /api/chat with streaming, tools and vision support for compatible models.

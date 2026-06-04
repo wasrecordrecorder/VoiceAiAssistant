@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebViewDA Status</title>
+    <link rel="stylesheet" href="styles/widget.css">
+  </head>
+  <body>
+    <main class="widget" id="dragRegion">
+      <div class="indicator" id="indicator"></div>
+      <div class="content">
+        <div class="state" id="widgetState">Готов</div>
+        <div class="step" id="widgetStep">Ожидаю команду</div>
+      </div>
+      <button class="open" id="openButton" aria-label="Открыть приложение">
+        <svg viewBox="0 0 24 24"><path d="M8 5h11v11M19 5 5 19"/></svg>
+      </button>
+    </main>
+    <script type="module" src="scripts/widget.js"></script>
+  </body>
+</html>
